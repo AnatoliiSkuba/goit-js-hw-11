@@ -1,56 +1,88 @@
 import './sass/main.scss';
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
-// Описан в документации
 import SimpleLightbox from "simplelightbox";
-// Дополнительный импорт стилей
 import "simplelightbox/dist/simple-lightbox.min.css";
-import API from './fetchImages ';
+import ImagesApiService from './fetchImages ';
 
-const form = document.querySelector(".search-form");
-const gallery = document.querySelector(".gallery");
-gallery.style.listStyleType = "none";
+const refs = {
+  searchForm: document.querySelector(".search-form"),
+  gallery: document.querySelector(".gallery"),
+  loadMoreBtn: document.querySelector(".load-more"),
+};
 
-const markupHeader = `<h1 class="visually-hidden"></h1>`;
-form.insertAdjacentHTML('afterend', markupHeader);
-const h1 = document.querySelector('h1')
+const imagesApiService = new ImagesApiService();
+let totalImages = 0;
 
-form.addEventListener("submit", handleSubmit);
+refs.searchForm.addEventListener("submit", onSearch);
+refs.loadMoreBtn.addEventListener("click", fetchGallery);
 
-function handleSubmit(event) {
-    event.preventDefault();
+function onSearch(event) {
+  event.preventDefault();  
+  refs.gallery.innerHTML = '';
+  refs.loadMoreBtn.classList.add('is-hidden');
+  imagesApiService.query = event.currentTarget.searchQuery.value;
+  imagesApiService.resetPage();
+  totalImages = 0;
+  fetchGallery();
+};
 
-h1.textContent = event.currentTarget.searchQuery.value
-
-    API.fetchImages(event)
-    .then(renderImages)
-    .catch(onFetchError)
-}
+async function fetchGallery() {
+  try {
+    const newImages = await imagesApiService.fetchImages();
+    return renderImages(newImages);
+  } catch (error) {
+    onFetchError(error);
+  };
+};
 
 function renderImages(images) {
-    console.log(images.hits);
-    
-    if (images.hits.length === 0) {Notify.failure('Sorry, there are no images matching your search query. Please try again.')} else { 
-  const markup = images.hits.map(({ webformatURL, largeImageURL, tags, likes, views, comments, downloads }) => `<li class="gallery__item"><a class="gallery__link" href="${largeImageURL}">
-  <img class="gallery__image" src="${webformatURL}" alt="${tags}" />
-  <ul class="gallery__info"><li><h2>Likes</h2><p>${likes}</p></li><li><h2>Views</h2><p>${views}</p></li><li><h2>Comments</h2><p>${comments}</p></li><li><h2>Downloads</h2><p>${downloads}</p></li></ul>
-</a></li>
+  if (images.hits.length === 0) {
+    refs.loadMoreBtn.classList.add('is-hidden');
+    Notify.failure('Sorry, there are no images matching your search query. Please try again.');
+  } else { 
+    const markup = images.hits.map(({ webformatURL, largeImageURL, tags, likes, views, comments, downloads }) => `
+  <div class="photo-card" href="${largeImageURL}">
+    <img class="gallery__image" src="${webformatURL}" alt="${tags}" loading="lazy" />
+      <div class="info">
+        <p class="info-item">
+          <b>Likes</b><br>${likes}
+        </p>
+        <p class="info-item">
+          <b>Views</b><br>${views}
+        </p>
+        <p class="info-item">
+          <b>Comments</b><br>${comments}
+        </p>
+        <p class="info-item">
+          <b>Downloads</b><br>${downloads}
+        </p>
+      </div>
+  </div>
   `).join('');
   
-  gallery.insertAdjacentHTML('afterbegin', markup);
-}
-}
+    refs.gallery.insertAdjacentHTML('beforeend', markup);
+    refs.loadMoreBtn.classList.remove('is-hidden');
+
+    totalImages += 40;
+    if (totalImages === 40) {
+      Notify.success(`Hooray! We found ${images.totalHits} images.`);
+    }
+    if (images.totalHits <= totalImages) {
+      Notify.failure("We're sorry, but you've reached the end of search results.");
+    refs.loadMoreBtn.classList.add('is-hidden');
+    };    
+  };
+  const lightbox = new SimpleLightbox('.gallery div', { captionDelay: 250 });
+  if (totalImages > 40) {
+    lightbox.refresh(); 
+    const { height: cardHeight } = document
+      .querySelector(".gallery")
+      .firstElementChild.getBoundingClientRect();
+    window.scrollBy({ top: cardHeight, behavior: "smooth", });
+  };
+};
 
 function onFetchError(error) {
     Notify.failure('Oops, there is no country with that name');
     console.log(error);
 };
-// function handleSubmit(event) {
-//     event.preventDefault();
-
-//     fetch(
-//         `https://pixabay.com/api/?key=26121476-a97ee3888781a95bbdf240963&q=${event.currentTarget.searchQuery.value}&image_type=photo&orientation=horizontal&safesearch=true`,
-//     )
-//     .then(r => r.json())
-//     .then(console.log)
-// }   
-
